@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Storage Center</title>
+    <!-- Include Vue.js and Firebase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+    <script src="https://www.gstatic.com/firebasejs/4.12.0/firebase.js"></script>
+    <script src="https://unpkg.com/native-toast@1.2.1/dist/native-toast.js"></script>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://unpkg.com/native-toast@1.2.1/dist/native-toast.css" rel="stylesheet">
+    <!-- Include Datatable CDN -->
+    <!-- Example: https://cdn.datatables.net/v/dt/dt-1.11.5/datatables.min.js -->
+    <!-- Example: https://cdn.datatables.net/v/dt/dt-1.11.5/datatables.min.css -->
+
+    <script crossorigin="anonymous"
+            integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <!-- Latest compiled and minified JavaScript -->
+    <script crossorigin="anonymous"
+            integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"
+            src="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/js/bootstrap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body>
+<div class="container" id="app">
+    <h1 class="text-center">USI</h1>
+    <!-- <h1 class="mt-4">Vue.js + Firebase CRUD with Datatable</h1> -->
+
+
+    <div class="input-group mb-3">
+        <input class="form-control" placeholder="Enter item name" type="text" v-model="newItem">
+    </div>
+    <div class="input-group mb-3">
+        <textarea class="form-control" cols="30" id="" name="" rows="10" v-model="newDescription"></textarea>
+    </div>
+    <div class="row">
+        <div class="col-6">
+            <button @click="addItem" class="btn btn-primary" type="button">Add Item</button>
+        </div>
+        <div class="col-6" style="float: right">
+            <input class="input_file" @change="onFileChange" multiple ref="file" type="file" v-model="fileInput">
+        </div>
+    </div>
+
+    <br>
+
+    <div v-if="showProgressBar" class="progress" v-for="(file, index) in files" :key="index" style="margin-bottom: 5px;">
+        <br>
+        <div class="progress-bar" role="progressbar" :style="{ width: file.uploadProgress + '%' }" aria-valuenow="file.uploadProgress" aria-valuemin="0" aria-valuemax="100">{{ file.uploadProgress }}%</div>
+    </div>
+
+    <br>
+
+    <table class="table" id="datatable">
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>Description</th>
+            <th>Files</th>
+            <th>Action</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr :key="index" v-for="(item, index) in items">
+            <td>{{ item.name }}</td>
+            <td>{{ item.description }}</td>
+            <td>
+                {{ item.files.length }}
+            </td>
+            <td>
+                <button @click="viewItemDetails(item)" class="btn btn-sm btn-primary">View</button>
+                <button @click="editItem(index)" class="btn btn-sm btn-info">Edit</button>
+                <button @click="deleteItem(index)" class="btn btn-sm btn-danger">Delete</button>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+
+    <!-- Edit Item Modal -->
+    <div class="modal" id="editModal" role="dialog" tabindex="-1">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Item</h5>
+                    <button aria-label="Close" class="close" data-dismiss="modal" type="button">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <input class="form-control" type="text" v-model="editedItemName">
+                    <textarea class="form-control mt-2" v-model="editedItemDescription"></textarea>
+
+                    <br>
+
+                    <ul>
+                        <li v-for="file in editedItemFiles" :key="file.name" style="border: solid 1px;">
+                            <a :href="'https://firebasestorage.googleapis.com/v0/b/satdev-8e166.appspot.com/o/' + encodeURIComponent(file) + '?alt=media'" target="_blank">{{ file }}</a>
+                            &nbsp;&nbsp;&nbsp; <i class="material-icons" style="font-size:15px;color:red;cursor:pointer" @click="individualFileDelete(file)">&#xe872;</i>
+                        </li>
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-dismiss="modal" type="button">Close</button>
+                    <button @click="updateItem" class="btn btn-primary" type="button">Save changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Modal -->
+    <div class="modal" id="viewModal" role="dialog" tabindex="-1">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">View Item Details</h5>
+                    <button aria-label="Close" class="close" data-dismiss="modal" type="button">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p><strong>New Item:</strong> {{ newItem }}</p>
+                    <p><strong>Description:</strong> {{ newDescription }}</p>
+                    <p><strong>Files Collection List:</strong></p>
+                    <ul>
+                        <li v-for="file in filesList" :key="file.name">
+                            <a :href="'https://firebasestorage.googleapis.com/v0/b/satdev-8e166.appspot.com/o/' + encodeURIComponent(file) + '?alt=media'" target="_blank">{{ file }}</a>
+                        </li>
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-dismiss="modal" type="button">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+
+<script>
+    // Initialize Firebase
+    const firebaseConfig = {
+        apiKey: "28ed49f879c73385d535673de5fcb974e81a248f",
+        authDomain: "https://satdev-8e166.firebaseapp.com/",
+        databaseURL: "https://satdev-8e166-default-rtdb.firebaseio.com/",
+        projectId: "satdev-8e166",
+        storageBucket: "gs://satdev-8e166.appspot.com",
+        messagingSenderId: "229459477139"
+    };
+    firebase.initializeApp(firebaseConfig);
+
+    new Vue({
+        el: '#app',
+        data: {
+            collectionMaster: 'rust',
+            collectionBook: 'rust/book',
+            collectionFiles: 'rust/files',
+            newItem: '',
+            newDescription: '',
+            items: [],
+            editedItemIndex: null,
+            editedItemName: '',
+            editedItemDescription: '',
+            editedItemFiles: [],
+            file: null,
+            files: [],
+            showProgressBar: false,
+            uploadProgress: 0,
+            uploadedFiles: [],
+            filesList: [],
+            fileInput: [],
+        },
+        computed: {
+            itemsCount() {
+                return this.items.length;
+            }
+        },
+        mounted() {
+            // Retrieve data from Firebase
+            firebase.database().ref(this.collectionBook).on('value', snapshot => {
+                this.items = [];
+                snapshot.forEach(childSnapshot => {
+                    this.items.push({
+                        id: childSnapshot.key,
+                        name: childSnapshot.val().name,
+                        description: childSnapshot.val().description,
+                        files: childSnapshot.val().files,
+                    });
+                });
+            });
+        },
+        methods: {
+            addItem() {
+                // Add item to Firebase
+                const newItem = this.newItem.trim();
+                if (newItem !== '') {
+                    const newItemData = {
+                        name: newItem,
+                        description: this.newDescription,
+                        files: this.files.map(file => file.file.name),
+                    };
+                    firebase.database().ref(this.collectionBook).push(newItemData);
+                    this.newItem = '';
+                    this.newDescription = '';
+                }
+
+                if (this.files.length > 0) {
+                    this.showProgressBar = true;
+                    const storageRef = firebase.storage().ref();
+
+                    this.files.forEach((fileObj, index) => {
+                        const fileRef = storageRef.child(fileObj.file.name);
+                        const uploadTask = fileRef.put(fileObj.file);
+
+                        uploadTask.on('state_changed',
+                            (snapshot) => {
+                                const fileProgress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                                this.$set(this.files, index, { ...fileObj, uploadProgress: fileProgress });
+                            },
+                            (error) => {
+                                console.error('Error uploading file:', error);
+                            },
+                            () => {
+                                console.log('File uploaded successfully');
+
+                                // Check if all file uploads have completed
+                                const allFilesUploaded = this.files.every(file => file.uploadProgress === 100);
+                                if (allFilesUploaded) {
+                                    // Reset newItem and newDescription
+                                    this.newItem = '';
+                                    this.newDescription = '';
+
+                                    // Reset files array
+                                    this.files = [];
+
+                                    // Reset file input field
+                                    //this.$refs.file.value = '';
+
+
+                                    // Hide progress bar
+                                    this.showProgressBar = false;
+
+                                    console.log('All file uploads completed successfully');
+                                }
+                            }
+                        );
+                    });
+                } else {
+                    console.error('No files selected');
+                }
+
+                this.fileInput = [];
+            },
+            editItem(index) {
+
+                this.editedItemIndex = index;
+                this.editedItemName = this.items[index].name;
+                this.editedItemDescription = this.items[index].description;
+                this.editedItemFiles = this.items[index].files;
+
+                $('#editModal').modal('show');
+
+            },
+            updateItem() {
+                if (this.editedItemIndex !== null) {
+                    const newName = this.editedItemName.trim();
+                    const newDescription = this.editedItemDescription.trim();
+                    if (newName !== '') {
+                        firebase.database().ref(this.collectionBook +'/'+ this.items[this.editedItemIndex].id).update({
+                            name: newName,
+                            description: newDescription
+                        });
+                        $('#editModal').modal('hide');
+                    }
+                }
+            },
+            deleteItem(index) {
+                // Implement delete functionality here
+                Swal.fire({
+                    title: 'Are you sure?',
+                    text: 'You are about to delete this item. This action cannot be undone.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: 'Yes, delete it'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        const storageRef = firebase.storage().ref();
+
+                        Array.from(this.items[index].files).map(file => {
+                            const fileRef = storageRef.child(file);
+
+                            // Delete the file from Firebase Storage
+                            fileRef.delete()
+                                .then(() => {
+                                    console.log('File deleted successfully:', file);
+                                    // Here you might want to remove the file from your database if needed
+                                })
+                                .catch(error => {
+                                    console.error('Error deleting file:', file, error);
+                                });
+                        });
+
+                        // Delete the item from Firebase
+                        firebase.database().ref(this.collectionBook +'/'+ this.items[index].id).remove();
+                        Swal.fire('Deleted!', 'The item has been deleted.', 'success');
+                    }
+                });
+            },
+            individualFileDelete(file){
+                // Implement delete functionality here
+                Swal.fire({
+                    title: 'Are you sure?',
+                    text: 'You are about to delete this item. This action cannot be undone.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: 'Yes, delete it'
+                }).then((result) => {
+                        if (result.isConfirmed) {
+                            Swal.fire('Deleted!', 'The item has been deleted.', 'success');
+                        }
+                });
+            },
+            onFileChange(event) {
+                this.files = Array.from(event.target.files).map(file => ({
+                    file: file,
+                    uploadProgress: 0
+                }));
+            },
+            viewItemDetails(item) {
+                this.newItem = item.name;
+                this.newDescription = item.description;
+                this.filesList = item.files;
+
+                // Show the modal
+                $('#viewModal').modal('show');
+            },
+        },
+        watch: {
+            'files.length': function(newLength, oldLength) {
+                console.log(`Array length changed from ${oldLength} to ${newLength}`);
+            }
+        }
+    });
+</script>
+</body>
+</html>
+
